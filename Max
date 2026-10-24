@@ -1,18 +1,18 @@
 -- ============================================================
--- Jujutsu Shenanigans Hub — Reorganized
--- Tabs: Auto Block | Counter | BF Chain | Other Features | Settings
+-- Jujutsu Shenanigans Hub — Final Integration
+-- Fixes: Lapse Blue blockable, Dummy/NPC support, Perfect Block BF
+-- Tabs: Auto Block | Counter | BF Chain | Other Features
 -- ============================================================
 
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
 local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 local VirtualInput     = game:GetService("VirtualInputManager")
 local LocalPlayer      = Players.LocalPlayer
 
 -- ============================================================
--- BLOCKABLE ANIMATION IDS (compressed — from your captures)
+-- BLOCKABLE ANIMATION IDS (Compressed + Corrected)
 -- ============================================================
 local BLOCKABLE_ANIM_IDS = {
     -- Standard M1 combo (verified)
@@ -55,11 +55,18 @@ local BLOCKABLE_ANIM_IDS = {
     ["99205259396653"]=true,["85068785050521"]=true,
 }
 
+-- ⚠️ CORRECTED: Lapse Blue is BLOCKABLE (removed from blacklist)
+-- Only genuinely unblockable moves remain here
+local UNBLOCKABLE_BLACKLIST = {
+    -- ["411286671"] = true, -- REMOVED: Lapse Blue is blockable per gamesteed/namu.wiki
+    -- Add confirmed unblockables here (e.g., Idle Transfiguration, World Slash)
+}
+
 -- ============================================================
 -- STATE
 -- ============================================================
 local autoBlockEnabled    = false
-local blockDetectRange    = 22
+local blockDetectRange    = 25
 local blockHoldTime       = 0.4
 local blockHeld           = false
 local blockReleaseToken   = 0
@@ -70,14 +77,18 @@ local counterCooldownTime = 1.5
 local counterCooldownEnd  = 0
 
 local autoBFCEnabled      = false
-local bfTiming            = 0.42
-local bfRange             = 28
+local bfTiming            = 0.35  -- Tightened to wiki 0.3-0.4s window
+local bfRange             = 30
 local bfCooldownTime      = 3.0
 local bfCooldownEnd       = 0
 local bfDoubleTapDelay    = 0.04
 local bfTeleportBehind    = true
 local bfDashFirst         = true
 local bfAttackKey         = Enum.KeyCode.Three
+
+local autoPerfectBlockBF  = false
+local perfectBlockCooldown = 2.0
+local lastPerfectBlock    = 0
 
 local autoDodgeEnabled    = false
 local autoAttackEnabled   = false
@@ -128,6 +139,30 @@ local function pressKey(key, holdTime)
     VirtualInput:SendKeyEvent(false, key, false, game)
 end
 
+-- Universal entity scan (works on players, dummies, NPCs)
+local function getClosestEntity(maxDist)
+    local best, bestDist = nil, maxDist
+    local myChar = LocalPlayer.Character
+    local myHRP  = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myHRP then return nil end
+
+    -- Scan ALL descendants for HumanoidRootParts (covers dummies/NPCs)
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj.Name == "HumanoidRootPart" and obj.Parent ~= myChar then
+            local hum = obj.Parent:FindFirstChildOfClass("Humanoid")
+            if hum and hum.Health > 0 then
+                -- Skip if it's a player (players are handled separately, but this catches them too)
+                local d = (obj.Position - myHRP.Position).Magnitude
+                if d < bestDist then
+                    bestDist = d
+                    best = obj.Parent -- Return the character model
+                end
+            end
+        end
+    end
+    return best, bestDist
+end
+
 local function tryCounter()
     if not autoCounterEnabled then return false end
     if tick() < counterCooldownEnd then return false end
@@ -142,72 +177,134 @@ local function onBlockableDetected()
 end
 
 -- ============================================================
--- ANIMATION LISTENER
+-- PERFECT BLOCK BLACK FLASH
 -- ============================================================
-local function setupBlockListener(plr)
-    if plr == LocalPlayer then return end
+local function attemptPerfectBlockBF()
+    if not autoPerfectBlockBF then return end
+    if tick() - lastPerfectBlock < perfectBlockCooldown then return end
 
-    local function connectCharacter(char)
-        local hum = char:WaitForChild("Humanoid", 10)
-        if not hum then return end
-        local animator = hum:WaitForChild("Animator", 10)
-        if not animator then return end
+    -- Press F (block) briefly
+    VirtualInput:SendKeyEvent(true, Enum.KeyCode.F, false, game)
+    task.wait(0.03)
+    VirtualInput:SendKeyEvent(false, Enum.KeyCode.F, false, game)
 
-        if activeAnimConnections[plr] then
-            pcall(function() activeAnimConnections[plr]:Disconnect() end)
-        end
+    -- Immediately press M1
+    task.wait(0.02)
+    VirtualInput:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+    task.wait(0.05)
+    VirtualInput:SendMouseButtonEvent(0, 0, 0, false, game, 0)
 
-        activeAnimConnections[plr] = animator.AnimationPlayed:Connect(function(track)
-            if not (autoBlockEnabled or autoCounterEnabled) then return end
-            if not LocalPlayer.Character then return end
-            local anim = track.Animation
-            if not anim then return end
-            local id = (anim.AnimationId or ""):match("%d+")
-            if not id or not BLOCKABLE_ANIM_IDS[id] then return end
-
-            local myHRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-            local eHRP  = char:FindFirstChild("HumanoidRootPart")
-            if not myHRP or not eHRP then return end
-            if (eHRP.Position - myHRP.Position).Magnitude > blockDetectRange then return end
-
-            onBlockableDetected()
-        end)
-    end
-
-    if plr.Character then task.spawn(connectCharacter, plr.Character) end
-    plr.CharacterAdded:Connect(connectCharacter)
+    lastPerfectBlock = tick()
+    print("[PerfectBlockBF] Attempted F -> M1 counter.")
 end
 
-for _, plr in ipairs(Players:GetPlayers()) do setupBlockListener(plr) end
-Players.PlayerAdded:Connect(setupBlockListener)
-Players.PlayerRemoving:Connect(function(plr)
-    if activeAnimConnections[plr] then
-        pcall(function() activeAnimConnections[plr]:Disconnect() end)
-        activeAnimConnections[plr] = nil
+-- ============================================================
+-- ANIMATION LISTENER (Works on all entities)
+-- ============================================================
+local function setupEntityListener(entity)
+    local char = entity
+    if not char or not char:FindFirstChild("Humanoid") then return end
+
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local animator = hum:FindFirstChild("Animator")
+    if not animator then return end
+
+    -- Avoid duplicate connections
+    if activeAnimConnections[char] then return end
+
+    activeAnimConnections[char] = animator.AnimationPlayed:Connect(function(track)
+        if not (autoBlockEnabled or autoCounterEnabled or autoPerfectBlockBF) then return end
+        if not LocalPlayer.Character then return end
+
+        local anim = track.Animation
+        if not anim then return end
+        local id = (anim.AnimationId or ""):match("%d+")
+        if not id then return end
+
+        -- Blacklist check
+        if UNBLOCKABLE_BLACKLIST[id] then
+            if autoPerfectBlockBF then attemptPerfectBlockBF() end
+            return
+        end
+
+        if not BLOCKABLE_ANIM_IDS[id] then return end
+
+        local myHRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local eHRP  = char:FindFirstChild("HumanoidRootPart")
+        if not myHRP or not eHRP then return end
+        if (eHRP.Position - myHRP.Position).Magnitude > blockDetectRange then return end
+
+        -- If Perfect Block BF is on and the move is blockable, try the F->M1 counter first
+        if autoPerfectBlockBF then
+            attemptPerfectBlockBF()
+        else
+            onBlockableDetected()
+        end
+    end)
+end
+
+-- Hook all current and future entities
+local function scanAllEntities()
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj.Name == "HumanoidRootPart" and obj.Parent ~= LocalPlayer.Character then
+            local char = obj.Parent
+            if char:FindFirstChildOfClass("Humanoid") then
+                setupEntityListener(char)
+            end
+        end
+    end
+end
+
+scanAllEntities()
+workspace.DescendantAdded:Connect(function(obj)
+    if obj.Name == "HumanoidRootPart" then
+        task.wait(1) -- Wait for character to load
+        local char = obj.Parent
+        if char and char:FindFirstChildOfClass("Humanoid") then
+            setupEntityListener(char)
+        end
     end
 end)
 
 -- ============================================================
--- HELPERS: nearest enemy / ESP
+-- BF CHAIN
 -- ============================================================
-local function getClosestEnemy(maxDist)
-    local best, bestDist = nil, maxDist
-    local myChar = LocalPlayer.Character
-    local myHRP  = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    if not myHRP then return nil end
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer and plr.Character then
-            local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-            local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-            if hrp and hum and hum.Health > 0 then
-                local d = (hrp.Position - myHRP.Position).Magnitude
-                if d < bestDist then bestDist = d; best = plr end
-            end
-        end
+local function attemptBFC()
+    if not autoBFCEnabled then return end
+    if tick() < bfCooldownEnd then return end
+
+    local target, dist = getClosestEntity(bfRange)
+    if not target then return end
+
+    local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local eHRP  = target:FindFirstChild("HumanoidRootPart")
+    if not myHRP or not eHRP then return end
+
+    bfCooldownEnd = tick() + bfCooldownTime
+    print("[BFC] → " .. target.Name)
+
+    if bfDashFirst then
+        pressKey(Enum.KeyCode.Q, 0.08)
+        task.wait(0.10)
     end
-    return best, bestDist
+
+    if bfTeleportBehind then
+        myHRP.CFrame = eHRP.CFrame * CFrame.new(0, 0, 3.5)
+    end
+    myHRP.CFrame = CFrame.new(myHRP.Position, eHRP.Position)
+    task.wait(0.05)
+
+    -- First press (Divergent Fist)
+    pressKey(bfAttackKey, bfDoubleTapDelay)
+    -- Wait for Black Flash window
+    task.wait(bfTiming)
+    -- Second press (Black Flash timing)
+    pressKey(bfAttackKey, bfDoubleTapDelay)
 end
 
+-- ============================================================
+-- ESP
+-- ============================================================
 local function updateESP()
     for plr, hl in pairs(espHighlights) do
         if not espEnabled or not plr.Character then
@@ -232,42 +329,6 @@ local function updateESP()
 end
 
 -- ============================================================
--- BF CHAIN
--- ============================================================
-local function attemptBFC()
-    if not autoBFCEnabled then return end
-    if tick() < bfCooldownEnd then return end
-
-    local target = getClosestEnemy(bfRange)
-    if not target then return end
-
-    local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    local eHRP  = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
-    if not myHRP or not eHRP then return end
-
-    bfCooldownEnd = tick() + bfCooldownTime
-    print("[BFC] → " .. target.Name)
-
-    if bfDashFirst then
-        pressKey(Enum.KeyCode.Q, 0.08)
-        task.wait(0.10)
-    end
-
-    if bfTeleportBehind then
-        myHRP.CFrame = eHRP.CFrame * CFrame.new(0, 0, 3.5)
-    end
-    myHRP.CFrame = CFrame.new(myHRP.Position, eHRP.Position)
-    task.wait(0.05)
-
-    -- First press
-    pressKey(bfAttackKey, bfDoubleTapDelay)
-    -- Wait for BF window
-    task.wait(bfTiming)
-    -- Second press
-    pressKey(bfAttackKey, bfDoubleTapDelay)
-end
-
--- ============================================================
 -- MAIN LOOP
 -- ============================================================
 RunService.Heartbeat:Connect(function()
@@ -276,6 +337,7 @@ RunService.Heartbeat:Connect(function()
     local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
     if not hrp or not hum or hum.Health <= 0 then return end
 
+    -- Auto Dodge
     if autoDodgeEnabled then
         local st = hum:GetState()
         if st == Enum.HumanoidStateType.Ragdoll or st == Enum.HumanoidStateType.FallingDown then
@@ -283,10 +345,11 @@ RunService.Heartbeat:Connect(function()
         end
     end
 
+    -- Auto Attack
     if autoAttackEnabled then
-        local target = getClosestEnemy(20)
-        if target and target.Character then
-            local eHRP = target.Character:FindFirstChild("HumanoidRootPart")
+        local target = getClosestEntity(20)
+        if target then
+            local eHRP = target:FindFirstChild("HumanoidRootPart")
             if eHRP then
                 hrp.CFrame = CFrame.new(hrp.Position, eHRP.Position)
                 VirtualInput:SendMouseButtonEvent(0, 0, 0, true,  game, 0)
@@ -296,30 +359,31 @@ RunService.Heartbeat:Connect(function()
         end
     end
 
+    -- Kill Aura
     if killAuraEnabled then
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= LocalPlayer and plr.Character then
-                local eHRP = plr.Character:FindFirstChild("HumanoidRootPart")
-                local eHum = plr.Character:FindFirstChildOfClass("Humanoid")
-                if eHRP and eHum and (eHRP.Position - hrp.Position).Magnitude < 10 then
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if obj.Name == "HumanoidRootPart" and obj.Parent ~= LocalPlayer.Character then
+                local eHum = obj.Parent:FindFirstChildOfClass("Humanoid")
+                if eHum and eHum.Health > 0 and (obj.Position - hrp.Position).Magnitude < 10 then
                     eHum:TakeDamage(5)
                 end
             end
         end
     end
 
+    -- BF Chain loop
     if autoBFCEnabled then attemptBFC() end
 end)
 
 -- ============================================================
--- WINDOW
+-- WINDOW & TABS
 -- ============================================================
 local Window = WindUI:CreateWindow({
     Title = "Jujutsu Shenanigans Hub",
     Icon = "swords",
     Author = "WindUI",
     Folder = "JJS_Hub",
-    Size = UDim2.fromOffset(620, 500),
+    Size = UDim2.fromOffset(620, 520),
     ToggleKey = Enum.KeyCode.RightShift,
     Theme = "Dark",
     Resizable = true,
@@ -341,7 +405,7 @@ BlockTab:Toggle({
 BlockTab:Slider({
     Title = "Detect Range (studs)",
     Desc = "Only block attacks within this distance",
-    Min = 5, Max = 60, Default = 22,
+    Min = 5, Max = 60, Default = 25,
     Callback = function(v) blockDetectRange = v end,
 })
 
@@ -350,11 +414,6 @@ BlockTab:Slider({
     Desc = "How long F is held per trigger",
     Min = 0.15, Max = 1.0, Default = 0.4,
     Callback = function(v) blockHoldTime = v end,
-})
-
-BlockTab:Paragraph({
-    Title = "Blockable IDs loaded",
-    Desc = "~120 verified blockable animation IDs (M1s, skills, Haruta, custom-M1 characters).",
 })
 
 -- ============================================================
@@ -384,9 +443,11 @@ CounterTab:Slider({
     Callback = function(v) counterCooldownTime = v end,
 })
 
-CounterTab:Paragraph({
-    Title = "How it works",
-    Desc = "When a blockable animation is detected: Counter fires first. If counter is off/on cooldown, block takes over.",
+CounterTab:Toggle({
+    Title = "Auto Perfect Block BF",
+    Desc = "Attempts F -> M1 Black Flash Counter on incoming attacks",
+    Flag = "AutoPerfectBF",
+    Callback = function(s) autoPerfectBlockBF = s end,
 })
 
 -- ============================================================
@@ -403,15 +464,15 @@ BFTab:Toggle({
 
 BFTab:Slider({
     Title = "BF Timing (s)",
-    Desc = "Delay between first 3 and second 3 (Black Flash window)",
-    Min = 0.20, Max = 0.80, Default = 0.42,
+    Desc = "Delay between first 3 and second 3 (0.3-0.4s ideal)",
+    Min = 0.20, Max = 0.60, Default = 0.35,
     Callback = function(v) bfTiming = v end,
 })
 
 BFTab:Slider({
     Title = "Chain Range (studs)",
     Desc = "Max distance to initiate the chain",
-    Min = 10, Max = 60, Default = 28,
+    Min = 10, Max = 60, Default = 30,
     Callback = function(v) bfRange = v end,
 })
 
@@ -420,13 +481,6 @@ BFTab:Slider({
     Desc = "Seconds between chain attempts",
     Min = 1, Max = 10, Default = 3.0,
     Callback = function(v) bfCooldownTime = v end,
-})
-
-BFTab:Slider({
-    Title = "Double-Tap Delay (s)",
-    Desc = "How long each 3-key press is held",
-    Min = 0.01, Max = 0.15, Default = 0.04,
-    Callback = function(v) bfDoubleTapDelay = v end,
 })
 
 BFTab:Toggle({
@@ -445,19 +499,6 @@ BFTab:Toggle({
     Callback = function(s) bfTeleportBehind = s end,
 })
 
-BFTab:Dropdown({
-    Title = "Attack Key",
-    Desc = "Which key triggers Divergent Fist (usually Three)",
-    Options = { "One", "Two", "Three", "Four", "R" },
-    Default = "Three",
-    Callback = function(v) bfAttackKey = Enum.KeyCode[v] end,
-})
-
-BFTab:Paragraph({
-    Title = "Timing tip",
-    Desc = "If no black/red sparks appear, adjust BF Timing in ±0.02 steps. Window is ~0.35–0.50s on stable ping.",
-})
-
 -- ============================================================
 -- TAB: OTHER FEATURES
 -- ============================================================
@@ -472,7 +513,7 @@ OtherTab:Toggle({
 
 OtherTab:Toggle({
     Title = "Auto Attack",
-    Desc = "Spams M1 at the nearest player",
+    Desc = "Spams M1 at the nearest entity (players + dummies)",
     Flag = "AutoAttack",
     Callback = function(s) autoAttackEnabled = s end,
 })
@@ -486,52 +527,23 @@ OtherTab:Toggle({
 
 OtherTab:Toggle({
     Title = "Kill Aura (client-side demo)",
-    Desc = "WARNING: TakeDamage is client-only — doesn't replicate",
+    Desc = "WARNING: TakeDamage is client-only — doesn't replicate to server",
     Flag = "KillAura",
     Callback = function(s) killAuraEnabled = s end,
 })
 
 OtherTab:Button({
-    Title = "Teleport to Nearest Enemy",
-    Desc = "Instantly teleport behind the closest player",
+    Title = "Teleport to Nearest Entity",
+    Desc = "Instantly teleport behind the closest player or dummy",
     Callback = function()
-        local target = getClosestEnemy(200)
-        if target and target.Character and LocalPlayer.Character then
-            local eHRP = target.Character:FindFirstChild("HumanoidRootPart")
+        local target = getClosestEntity(200)
+        if target and LocalPlayer.Character then
+            local eHRP = target:FindFirstChild("HumanoidRootPart")
             local mHRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
             if eHRP and mHRP then
                 mHRP.CFrame = eHRP.CFrame * CFrame.new(0, 0, 3)
             end
         end
-    end,
-})
-
-OtherTab:Button({
-    Title = "Reset Character",
-    Desc = "Respawn (useful when stuck in ragdoll)",
-    Callback = function()
-        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        if hum then hum.Health = 0 end
-    end,
-})
-
--- ============================================================
--- TAB: SETTINGS
--- ============================================================
-local SettingsTab = Window:Tab({ Title = "Settings", Icon = "settings" })
-
-SettingsTab:Paragraph({
-    Title = "Toggle Menu",
-    Desc = "Press RightShift to show/hide this menu.",
-})
-
-SettingsTab:Button({
-    Title = "Unload Script",
-    Desc = "Releases F key and closes the UI",
-    Callback = function()
-        releaseBlockNow()
-        VirtualInput:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
-        Window:Destroy()
     end,
 })
 
@@ -543,4 +555,4 @@ Window:OnClose(function()
     VirtualInput:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
 end)
 
-print("[JJS Hub] Loaded — RightShift to toggle.")
+print("[JJS Hub] Loaded — RightShift to toggle. Dummies/NPCs supported.")
