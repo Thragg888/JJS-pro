@@ -1,0 +1,546 @@
+-- ============================================================
+-- Jujutsu Shenanigans Hub — Reorganized
+-- Tabs: Auto Block | Counter | BF Chain | Other Features | Settings
+-- ============================================================
+
+local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local VirtualInput     = game:GetService("VirtualInputManager")
+local LocalPlayer      = Players.LocalPlayer
+
+-- ============================================================
+-- BLOCKABLE ANIMATION IDS (compressed — from your captures)
+-- ============================================================
+local BLOCKABLE_ANIM_IDS = {
+    -- Standard M1 combo (verified)
+    ["95295463826732"]=true,["105077924973072"]=true,["81630213087988"]=true,["124862357369335"]=true,
+    -- JJSBuilder M1s (legacy)
+    ["4571259077"]=true,["8595975878"]=true,["8595975458"]=true,["8595974357"]=true,
+    -- Haruta M1s
+    ["94221495279664"]=true,["111701118737902"]=true,["121592312107730"]=true,["117243892822517"]=true,
+    -- Gojo Twofold Kick
+    ["3755637186"]=true,["3755636992"]=true,["4086172909"]=true,["7515452875"]=true,
+    -- Yuji Cursed Strikes
+    ["16773286492"]=true,["16773286330"]=true,
+    -- Batch 1
+    ["94588892125071"]=true,["138826758216894"]=true,["97868312130612"]=true,["140588454098230"]=true,
+    ["70394890117813"]=true,["114822879878184"]=true,["73243807139765"]=true,["70619893542373"]=true,
+    ["84063127664904"]=true,["103659500760745"]=true,["108407413391495"]=true,["113722638806911"]=true,
+    ["109598602517674"]=true,["92595499555055"]=true,["96466374346823"]=true,["130957217409359"]=true,
+    ["100811576955331"]=true,["81210313723714"]=true,["102285403332509"]=true,["104137631480391"]=true,
+    ["79436586236026"]=true,["84359513001979"]=true,["86045680364061"]=true,["101079657277587"]=true,
+    ["120136894011461"]=true,["93901924492394"]=true,["125904281673524"]=true,["95077220586856"]=true,
+    ["108418554887656"]=true,["89652378115594"]=true,["135411487367370"]=true,["133869529005453"]=true,
+    ["111720035828971"]=true,["71785780090087"]=true,["131358603583212"]=true,["100081544058065"]=true,
+    ["127171275866632"]=true,["84039122607068"]=true,["100446064103831"]=true,["72475960800126"]=true,
+    ["89092734635186"]=true,["132653290201368"]=true,["116432619539029"]=true,["108123475959041"]=true,
+    ["82541714192027"]=true,["72063002791216"]=true,["100962226150441"]=true,["77200218033775"]=true,
+    ["84737448668938"]=true,["104749346956269"]=true,["137654778575373"]=true,["137865634124104"]=true,
+    ["131506102901134"]=true,
+    -- Batch 2
+    ["123591522021548"]=true,["105961366724096"]=true,["124726819047447"]=true,["139479927693015"]=true,
+    ["86519781516542"]=true,["101681158700275"]=true,["133447840605824"]=true,["106282708121342"]=true,
+    ["113963875117859"]=true,["79271374075726"]=true,["139833047658617"]=true,["84080901810314"]=true,
+    ["125689391910002"]=true,["82881042739459"]=true,["130806585141471"]=true,["131967150738931"]=true,
+    ["84442064935420"]=true,["133240987753043"]=true,["133936641185614"]=true,["122573730331631"]=true,
+    ["118634493886688"]=true,["82400997593751"]=true,["105191773344078"]=true,["85938446097801"]=true,
+    ["78636717376287"]=true,["83430571986421"]=true,["99180695169591"]=true,["81007905598407"]=true,
+    ["90781290293652"]=true,["126362899488198"]=true,["118076716434659"]=true,["108865650924154"]=true,
+    ["76957377224584"]=true,["102580834319938"]=true,["78453184359132"]=true,["102053631728986"]=true,
+    ["103013818601982"]=true,["94347210073500"]=true,["115097960689033"]=true,["121550561336691"]=true,
+    ["134777193523837"]=true,["129678103897608"]=true,["108027796023968"]=true,["79086910454958"]=true,
+    ["99205259396653"]=true,["85068785050521"]=true,
+}
+
+-- ============================================================
+-- STATE
+-- ============================================================
+local autoBlockEnabled    = false
+local blockDetectRange    = 22
+local blockHoldTime       = 0.4
+local blockHeld           = false
+local blockReleaseToken   = 0
+
+local autoCounterEnabled  = false
+local counterKey          = Enum.KeyCode.R
+local counterCooldownTime = 1.5
+local counterCooldownEnd  = 0
+
+local autoBFCEnabled      = false
+local bfTiming            = 0.42
+local bfRange             = 28
+local bfCooldownTime      = 3.0
+local bfCooldownEnd       = 0
+local bfDoubleTapDelay    = 0.04
+local bfTeleportBehind    = true
+local bfDashFirst         = true
+local bfAttackKey         = Enum.KeyCode.Three
+
+local autoDodgeEnabled    = false
+local autoAttackEnabled   = false
+local espEnabled          = false
+local killAuraEnabled     = false
+
+local activeAnimConnections = {}
+local espHighlights         = {}
+
+-- ============================================================
+-- CORE HELPERS
+-- ============================================================
+local function triggerBlock()
+    if blockHeld then
+        blockReleaseToken = blockReleaseToken + 1
+        local myToken = blockReleaseToken
+        task.delay(blockHoldTime, function()
+            if blockReleaseToken == myToken then
+                VirtualInput:SendKeyEvent(false, Enum.KeyCode.F, false, game)
+                blockHeld = false
+            end
+        end)
+        return
+    end
+    VirtualInput:SendKeyEvent(true, Enum.KeyCode.F, false, game)
+    blockHeld = true
+    blockReleaseToken = blockReleaseToken + 1
+    local myToken = blockReleaseToken
+    task.delay(blockHoldTime, function()
+        if blockReleaseToken == myToken then
+            VirtualInput:SendKeyEvent(false, Enum.KeyCode.F, false, game)
+            blockHeld = false
+        end
+    end)
+end
+
+local function releaseBlockNow()
+    blockReleaseToken = blockReleaseToken + 1
+    if blockHeld then
+        VirtualInput:SendKeyEvent(false, Enum.KeyCode.F, false, game)
+        blockHeld = false
+    end
+end
+
+local function pressKey(key, holdTime)
+    VirtualInput:SendKeyEvent(true, key, false, game)
+    task.wait(holdTime or 0.05)
+    VirtualInput:SendKeyEvent(false, key, false, game)
+end
+
+local function tryCounter()
+    if not autoCounterEnabled then return false end
+    if tick() < counterCooldownEnd then return false end
+    pressKey(counterKey, 0.05)
+    counterCooldownEnd = tick() + counterCooldownTime
+    return true
+end
+
+local function onBlockableDetected()
+    if tryCounter() then return end
+    if autoBlockEnabled then triggerBlock() end
+end
+
+-- ============================================================
+-- ANIMATION LISTENER
+-- ============================================================
+local function setupBlockListener(plr)
+    if plr == LocalPlayer then return end
+
+    local function connectCharacter(char)
+        local hum = char:WaitForChild("Humanoid", 10)
+        if not hum then return end
+        local animator = hum:WaitForChild("Animator", 10)
+        if not animator then return end
+
+        if activeAnimConnections[plr] then
+            pcall(function() activeAnimConnections[plr]:Disconnect() end)
+        end
+
+        activeAnimConnections[plr] = animator.AnimationPlayed:Connect(function(track)
+            if not (autoBlockEnabled or autoCounterEnabled) then return end
+            if not LocalPlayer.Character then return end
+            local anim = track.Animation
+            if not anim then return end
+            local id = (anim.AnimationId or ""):match("%d+")
+            if not id or not BLOCKABLE_ANIM_IDS[id] then return end
+
+            local myHRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            local eHRP  = char:FindFirstChild("HumanoidRootPart")
+            if not myHRP or not eHRP then return end
+            if (eHRP.Position - myHRP.Position).Magnitude > blockDetectRange then return end
+
+            onBlockableDetected()
+        end)
+    end
+
+    if plr.Character then task.spawn(connectCharacter, plr.Character) end
+    plr.CharacterAdded:Connect(connectCharacter)
+end
+
+for _, plr in ipairs(Players:GetPlayers()) do setupBlockListener(plr) end
+Players.PlayerAdded:Connect(setupBlockListener)
+Players.PlayerRemoving:Connect(function(plr)
+    if activeAnimConnections[plr] then
+        pcall(function() activeAnimConnections[plr]:Disconnect() end)
+        activeAnimConnections[plr] = nil
+    end
+end)
+
+-- ============================================================
+-- HELPERS: nearest enemy / ESP
+-- ============================================================
+local function getClosestEnemy(maxDist)
+    local best, bestDist = nil, maxDist
+    local myChar = LocalPlayer.Character
+    local myHRP  = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myHRP then return nil end
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character then
+            local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+            local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+            if hrp and hum and hum.Health > 0 then
+                local d = (hrp.Position - myHRP.Position).Magnitude
+                if d < bestDist then bestDist = d; best = plr end
+            end
+        end
+    end
+    return best, bestDist
+end
+
+local function updateESP()
+    for plr, hl in pairs(espHighlights) do
+        if not espEnabled or not plr.Character then
+            if hl then hl:Destroy() end
+            espHighlights[plr] = nil
+        end
+    end
+    if espEnabled then
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and plr.Character then
+                if not espHighlights[plr] then
+                    local hl = Instance.new("Highlight")
+                    hl.FillColor = Color3.fromRGB(255, 60, 60)
+                    hl.FillTransparency = 0.6
+                    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                    hl.Parent = plr.Character
+                    espHighlights[plr] = hl
+                end
+            end
+        end
+    end
+end
+
+-- ============================================================
+-- BF CHAIN
+-- ============================================================
+local function attemptBFC()
+    if not autoBFCEnabled then return end
+    if tick() < bfCooldownEnd then return end
+
+    local target = getClosestEnemy(bfRange)
+    if not target then return end
+
+    local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local eHRP  = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+    if not myHRP or not eHRP then return end
+
+    bfCooldownEnd = tick() + bfCooldownTime
+    print("[BFC] → " .. target.Name)
+
+    if bfDashFirst then
+        pressKey(Enum.KeyCode.Q, 0.08)
+        task.wait(0.10)
+    end
+
+    if bfTeleportBehind then
+        myHRP.CFrame = eHRP.CFrame * CFrame.new(0, 0, 3.5)
+    end
+    myHRP.CFrame = CFrame.new(myHRP.Position, eHRP.Position)
+    task.wait(0.05)
+
+    -- First press
+    pressKey(bfAttackKey, bfDoubleTapDelay)
+    -- Wait for BF window
+    task.wait(bfTiming)
+    -- Second press
+    pressKey(bfAttackKey, bfDoubleTapDelay)
+end
+
+-- ============================================================
+-- MAIN LOOP
+-- ============================================================
+RunService.Heartbeat:Connect(function()
+    if not LocalPlayer.Character then return end
+    local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if not hrp or not hum or hum.Health <= 0 then return end
+
+    if autoDodgeEnabled then
+        local st = hum:GetState()
+        if st == Enum.HumanoidStateType.Ragdoll or st == Enum.HumanoidStateType.FallingDown then
+            pressKey(Enum.KeyCode.Q, 0.05)
+        end
+    end
+
+    if autoAttackEnabled then
+        local target = getClosestEnemy(20)
+        if target and target.Character then
+            local eHRP = target.Character:FindFirstChild("HumanoidRootPart")
+            if eHRP then
+                hrp.CFrame = CFrame.new(hrp.Position, eHRP.Position)
+                VirtualInput:SendMouseButtonEvent(0, 0, 0, true,  game, 0)
+                task.wait(0.1)
+                VirtualInput:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+            end
+        end
+    end
+
+    if killAuraEnabled then
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and plr.Character then
+                local eHRP = plr.Character:FindFirstChild("HumanoidRootPart")
+                local eHum = plr.Character:FindFirstChildOfClass("Humanoid")
+                if eHRP and eHum and (eHRP.Position - hrp.Position).Magnitude < 10 then
+                    eHum:TakeDamage(5)
+                end
+            end
+        end
+    end
+
+    if autoBFCEnabled then attemptBFC() end
+end)
+
+-- ============================================================
+-- WINDOW
+-- ============================================================
+local Window = WindUI:CreateWindow({
+    Title = "Jujutsu Shenanigans Hub",
+    Icon = "swords",
+    Author = "WindUI",
+    Folder = "JJS_Hub",
+    Size = UDim2.fromOffset(620, 500),
+    ToggleKey = Enum.KeyCode.RightShift,
+    Theme = "Dark",
+    Resizable = true,
+    SideBarWidth = 180,
+})
+
+-- ============================================================
+-- TAB: AUTO BLOCK
+-- ============================================================
+local BlockTab = Window:Tab({ Title = "Auto Block", Icon = "shield" })
+
+BlockTab:Toggle({
+    Title = "Auto Block",
+    Desc = "Presses F when a blockable attack animation plays nearby",
+    Flag = "AutoBlock",
+    Callback = function(s) autoBlockEnabled = s; if not s then releaseBlockNow() end end,
+})
+
+BlockTab:Slider({
+    Title = "Detect Range (studs)",
+    Desc = "Only block attacks within this distance",
+    Min = 5, Max = 60, Default = 22,
+    Callback = function(v) blockDetectRange = v end,
+})
+
+BlockTab:Slider({
+    Title = "Block Hold Time (s)",
+    Desc = "How long F is held per trigger",
+    Min = 0.15, Max = 1.0, Default = 0.4,
+    Callback = function(v) blockHoldTime = v end,
+})
+
+BlockTab:Paragraph({
+    Title = "Blockable IDs loaded",
+    Desc = "~120 verified blockable animation IDs (M1s, skills, Haruta, custom-M1 characters).",
+})
+
+-- ============================================================
+-- TAB: COUNTER
+-- ============================================================
+local CounterTab = Window:Tab({ Title = "Counter", Icon = "zap" })
+
+CounterTab:Toggle({
+    Title = "Auto Counter (Priority)",
+    Desc = "Tries to counter before falling back to block",
+    Flag = "AutoCounter",
+    Callback = function(s) autoCounterEnabled = s end,
+})
+
+CounterTab:Dropdown({
+    Title = "Counter Key",
+    Desc = "Which key your character's counter move is bound to",
+    Options = { "One", "Two", "Three", "Four", "Q", "R", "F", "G" },
+    Default = "R",
+    Callback = function(v) counterKey = Enum.KeyCode[v] end,
+})
+
+CounterTab:Slider({
+    Title = "Counter Cooldown (s)",
+    Desc = "Time before counter can trigger again",
+    Min = 0.5, Max = 5, Default = 1.5,
+    Callback = function(v) counterCooldownTime = v end,
+})
+
+CounterTab:Paragraph({
+    Title = "How it works",
+    Desc = "When a blockable animation is detected: Counter fires first. If counter is off/on cooldown, block takes over.",
+})
+
+-- ============================================================
+-- TAB: BF CHAIN
+-- ============================================================
+local BFTab = Window:Tab({ Title = "BF Chain", Icon = "sparkles" })
+
+BFTab:Toggle({
+    Title = "Auto Black Flash Chain (Yuji)",
+    Desc = "Dash → teleport behind → double-tap 3 for Black Flash",
+    Flag = "AutoBFC",
+    Callback = function(s) autoBFCEnabled = s end,
+})
+
+BFTab:Slider({
+    Title = "BF Timing (s)",
+    Desc = "Delay between first 3 and second 3 (Black Flash window)",
+    Min = 0.20, Max = 0.80, Default = 0.42,
+    Callback = function(v) bfTiming = v end,
+})
+
+BFTab:Slider({
+    Title = "Chain Range (studs)",
+    Desc = "Max distance to initiate the chain",
+    Min = 10, Max = 60, Default = 28,
+    Callback = function(v) bfRange = v end,
+})
+
+BFTab:Slider({
+    Title = "Chain Cooldown (s)",
+    Desc = "Seconds between chain attempts",
+    Min = 1, Max = 10, Default = 3.0,
+    Callback = function(v) bfCooldownTime = v end,
+})
+
+BFTab:Slider({
+    Title = "Double-Tap Delay (s)",
+    Desc = "How long each 3-key press is held",
+    Min = 0.01, Max = 0.15, Default = 0.04,
+    Callback = function(v) bfDoubleTapDelay = v end,
+})
+
+BFTab:Toggle({
+    Title = "Dash First",
+    Desc = "Press Q before teleporting",
+    Default = true,
+    Flag = "BFDash",
+    Callback = function(s) bfDashFirst = s end,
+})
+
+BFTab:Toggle({
+    Title = "Teleport Behind Target",
+    Desc = "Curve to the enemy's back before the double-tap",
+    Default = true,
+    Flag = "BFTeleport",
+    Callback = function(s) bfTeleportBehind = s end,
+})
+
+BFTab:Dropdown({
+    Title = "Attack Key",
+    Desc = "Which key triggers Divergent Fist (usually Three)",
+    Options = { "One", "Two", "Three", "Four", "R" },
+    Default = "Three",
+    Callback = function(v) bfAttackKey = Enum.KeyCode[v] end,
+})
+
+BFTab:Paragraph({
+    Title = "Timing tip",
+    Desc = "If no black/red sparks appear, adjust BF Timing in ±0.02 steps. Window is ~0.35–0.50s on stable ping.",
+})
+
+-- ============================================================
+-- TAB: OTHER FEATURES
+-- ============================================================
+local OtherTab = Window:Tab({ Title = "Other Features", Icon = "box" })
+
+OtherTab:Toggle({
+    Title = "Auto Dodge",
+    Desc = "Dashes (Q) when ragdolled or knocked down",
+    Flag = "AutoDodge",
+    Callback = function(s) autoDodgeEnabled = s end,
+})
+
+OtherTab:Toggle({
+    Title = "Auto Attack",
+    Desc = "Spams M1 at the nearest player",
+    Flag = "AutoAttack",
+    Callback = function(s) autoAttackEnabled = s end,
+})
+
+OtherTab:Toggle({
+    Title = "Player ESP",
+    Desc = "Highlights all nearby players",
+    Flag = "ESP",
+    Callback = function(s) espEnabled = s; updateESP() end,
+})
+
+OtherTab:Toggle({
+    Title = "Kill Aura (client-side demo)",
+    Desc = "WARNING: TakeDamage is client-only — doesn't replicate",
+    Flag = "KillAura",
+    Callback = function(s) killAuraEnabled = s end,
+})
+
+OtherTab:Button({
+    Title = "Teleport to Nearest Enemy",
+    Desc = "Instantly teleport behind the closest player",
+    Callback = function()
+        local target = getClosestEnemy(200)
+        if target and target.Character and LocalPlayer.Character then
+            local eHRP = target.Character:FindFirstChild("HumanoidRootPart")
+            local mHRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if eHRP and mHRP then
+                mHRP.CFrame = eHRP.CFrame * CFrame.new(0, 0, 3)
+            end
+        end
+    end,
+})
+
+OtherTab:Button({
+    Title = "Reset Character",
+    Desc = "Respawn (useful when stuck in ragdoll)",
+    Callback = function()
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then hum.Health = 0 end
+    end,
+})
+
+-- ============================================================
+-- TAB: SETTINGS
+-- ============================================================
+local SettingsTab = Window:Tab({ Title = "Settings", Icon = "settings" })
+
+SettingsTab:Paragraph({
+    Title = "Toggle Menu",
+    Desc = "Press RightShift to show/hide this menu.",
+})
+
+SettingsTab:Button({
+    Title = "Unload Script",
+    Desc = "Releases F key and closes the UI",
+    Callback = function()
+        releaseBlockNow()
+        VirtualInput:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
+        Window:Destroy()
+    end,
+})
+
+-- ============================================================
+-- CLEANUP
+-- ============================================================
+Window:OnClose(function()
+    releaseBlockNow()
+    VirtualInput:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
+end)
+
+print("[JJS Hub] Loaded — RightShift to toggle.")
