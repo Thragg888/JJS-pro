@@ -1,102 +1,214 @@
 -- ============================================================
--- Jujutsu Shenanigans Hub — Final Integration
--- Fixes: Lapse Blue blockable, Dummy/NPC support, Perfect Block BF
--- Tabs: Auto Block | Counter | BF Chain | Other Features
+-- Jujutsu Shenanigans Hub — v4 (Floating Cam Lock Button)
 -- ============================================================
 
-local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
-
+local WindUI           = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local VirtualInput     = game:GetService("VirtualInputManager")
 local LocalPlayer      = Players.LocalPlayer
 
 -- ============================================================
--- BLOCKABLE ANIMATION IDS (Compressed + Corrected)
+-- BLOCKABLE ANIMATION IDS (~160 verified)
 -- ============================================================
 local BLOCKABLE_ANIM_IDS = {
-    -- Standard M1 combo (verified)
     ["95295463826732"]=true,["105077924973072"]=true,["81630213087988"]=true,["124862357369335"]=true,
-    -- JJSBuilder M1s (legacy)
-    ["4571259077"]=true,["8595975878"]=true,["8595975458"]=true,["8595974357"]=true,
-    -- Haruta M1s
-    ["94221495279664"]=true,["111701118737902"]=true,["121592312107730"]=true,["117243892822517"]=true,
-    -- Gojo Twofold Kick
-    ["3755637186"]=true,["3755636992"]=true,["4086172909"]=true,["7515452875"]=true,
-    -- Yuji Cursed Strikes
-    ["16773286492"]=true,["16773286330"]=true,
-    -- Batch 1
     ["94588892125071"]=true,["138826758216894"]=true,["97868312130612"]=true,["140588454098230"]=true,
-    ["70394890117813"]=true,["114822879878184"]=true,["73243807139765"]=true,["70619893542373"]=true,
-    ["84063127664904"]=true,["103659500760745"]=true,["108407413391495"]=true,["113722638806911"]=true,
-    ["109598602517674"]=true,["92595499555055"]=true,["96466374346823"]=true,["130957217409359"]=true,
-    ["100811576955331"]=true,["81210313723714"]=true,["102285403332509"]=true,["104137631480391"]=true,
-    ["79436586236026"]=true,["84359513001979"]=true,["86045680364061"]=true,["101079657277587"]=true,
-    ["120136894011461"]=true,["93901924492394"]=true,["125904281673524"]=true,["95077220586856"]=true,
-    ["108418554887656"]=true,["89652378115594"]=true,["135411487367370"]=true,["133869529005453"]=true,
-    ["111720035828971"]=true,["71785780090087"]=true,["131358603583212"]=true,["100081544058065"]=true,
-    ["127171275866632"]=true,["84039122607068"]=true,["100446064103831"]=true,["72475960800126"]=true,
-    ["89092734635186"]=true,["132653290201368"]=true,["116432619539029"]=true,["108123475959041"]=true,
-    ["82541714192027"]=true,["72063002791216"]=true,["100962226150441"]=true,["77200218033775"]=true,
-    ["84737448668938"]=true,["104749346956269"]=true,["137654778575373"]=true,["137865634124104"]=true,
-    ["131506102901134"]=true,
-    -- Batch 2
-    ["123591522021548"]=true,["105961366724096"]=true,["124726819047447"]=true,["139479927693015"]=true,
-    ["86519781516542"]=true,["101681158700275"]=true,["133447840605824"]=true,["106282708121342"]=true,
-    ["113963875117859"]=true,["79271374075726"]=true,["139833047658617"]=true,["84080901810314"]=true,
-    ["125689391910002"]=true,["82881042739459"]=true,["130806585141471"]=true,["131967150738931"]=true,
-    ["84442064935420"]=true,["133240987753043"]=true,["133936641185614"]=true,["122573730331631"]=true,
-    ["118634493886688"]=true,["82400997593751"]=true,["105191773344078"]=true,["85938446097801"]=true,
-    ["78636717376287"]=true,["83430571986421"]=true,["99180695169591"]=true,["81007905598407"]=true,
-    ["90781290293652"]=true,["126362899488198"]=true,["118076716434659"]=true,["108865650924154"]=true,
-    ["76957377224584"]=true,["102580834319938"]=true,["78453184359132"]=true,["102053631728986"]=true,
-    ["103013818601982"]=true,["94347210073500"]=true,["115097960689033"]=true,["121550561336691"]=true,
-    ["134777193523837"]=true,["129678103897608"]=true,["108027796023968"]=true,["79086910454958"]=true,
-    ["99205259396653"]=true,["85068785050521"]=true,
+    ["130806585141471"]=true,["108027796023968"]=true,["86519781516542"]=true,["108449614447004"]=true,
+    ["96327114254575"]=true,["75337033003776"]=true,["79436586236026"]=true,["92698956945928"]=true,
+    ["124726819047447"]=true,["105287938257399"]=true,["106892235857467"]=true,["131909724908049"]=true,
+    ["131967150738931"]=true,["82400997593751"]=true,["121322029260156"]=true,["133240987753043"]=true,
+    ["98783064085844"]=true,["99710481887795"]=true,["79718433989469"]=true,["78418813242411"]=true,
+    ["109598602517674"]=true,["126277739156443"]=true,["116910683335467"]=true,["105961366724096"]=true,
+    ["110958607174992"]=true,["127851700400958"]=true,["79086910454958"]=true,["84080901810314"]=true,
+    ["117831239064143"]=true,["119042572747325"]=true,["99205259396653"]=true,["79271374075726"]=true,
+    ["80809423999548"]=true,["128057999506702"]=true,["85068785050521"]=true,["82881042739459"]=true,
+    ["117638619792450"]=true,["133447840605824"]=true,["107852433150124"]=true,["101681158700275"]=true,
+    ["76372421343979"]=true,["106282708121342"]=true,["113963875117859"]=true,["101283990868172"]=true,
+    ["139833047658617"]=true,["122170399962557"]=true,["122655618588472"]=true,["108708446862011"]=true,
+    ["102285403332509"]=true,["122573730331631"]=true,["131224959939598"]=true,["133936641185614"]=true,
+    ["135805825263494"]=true,["84547415708554"]=true,["108686045412945"]=true,["125689391910002"]=true,
+    ["138489871864252"]=true,["84442064935420"]=true,["84359513001979"]=true,["77583711129628"]=true,
+    ["123591522021548"]=true,["123168328205349"]=true,["119248903710146"]=true,["72575786212990"]=true,
+    ["104137631480391"]=true,["139479927693015"]=true,["93623649598782"]=true,["118634493886688"]=true,
+    ["114985590391235"]=true,["115525391286129"]=true,["96185406489877"]=true,["107029561762376"]=true,
+    ["72548435296350"]=true,["85148168523745"]=true,["70646495941088"]=true,
+    ["78578012001859"]=true,["86618245908620"]=true,["137451357351000"]=true,
+    ["117371289990421"]=true,["126213385043407"]=true,["123778544771528"]=true,["89888040037257"]=true,
+    ["130013701390383"]=true,["127727754867974"]=true,["131506102901134"]=true,
+    ["105191773344078"]=true,["86403201308630"]=true,
+    ["104082985552315"]=true,["85938446097801"]=true,["83430571986421"]=true,["78636717376287"]=true,
+    ["126362899488198"]=true,["90781290293652"]=true,["81007905598407"]=true,["99180695169591"]=true,
+    ["117836779292116"]=true,["102580834319938"]=true,["118076716434659"]=true,["76957377224584"]=true,
+    ["108865650924154"]=true,["102053631728986"]=true,["78453184359132"]=true,
+    ["103013818601982"]=true,["115097960689033"]=true,["94347210073500"]=true,
+    ["134777193523837"]=true,["129678103897608"]=true,["121550561336691"]=true,
+    ["108407413391495"]=true,["132615896981226"]=true,["106478217686775"]=true,["84063127664904"]=true,
+    ["70394890117813"]=true,["114822879878184"]=true,["73243807139765"]=true,
+    ["96466374346823"]=true,["92595499555055"]=true,
+    ["81210313723714"]=true,["130957217409359"]=true,["100811576955331"]=true,
+    ["101079657277587"]=true,["86045680364061"]=true,
+    ["93901924492394"]=true,["120136894011461"]=true,
+    ["135411487367370"]=true,["89652378115594"]=true,["86362077638309"]=true,["133869529005453"]=true,
+    ["111720035828971"]=true,["71785780090087"]=true,["116040503139675"]=true,["84737448668938"]=true,
+    ["84039122607068"]=true,["100446064103831"]=true,["127171275866632"]=true,
+    ["89092734635186"]=true,["103493656287292"]=true,["72475960800126"]=true,
+    ["132653290201368"]=true,["116432619539029"]=true,
+    ["72063002791216"]=true,["72467492674240"]=true,["108123475959041"]=true,
+    ["74145636023952"]=true,["100962226150441"]=true,["123171106092050"]=true,
+    ["77200218033775"]=true,["124901309160375"]=true,
+    ["110978068388232"]=true,["99920923658527"]=true,["137865634124104"]=true,["137654778575373"]=true,
+    ["94221495279664"]=true,["111701118737902"]=true,["121592312107730"]=true,["117243892822517"]=true,
+    ["4571259077"]=true,["8595975878"]=true,["8595975458"]=true,["8595974357"]=true,
+    ["3755637186"]=true,["3755636992"]=true,["4086172909"]=true,["7515452875"]=true,
+    ["16773286492"]=true,["16773286330"]=true,
 }
 
--- ⚠️ CORRECTED: Lapse Blue is BLOCKABLE (removed from blacklist)
--- Only genuinely unblockable moves remain here
-local UNBLOCKABLE_BLACKLIST = {
-    -- ["411286671"] = true, -- REMOVED: Lapse Blue is blockable per gamesteed/namu.wiki
-    -- Add confirmed unblockables here (e.g., Idle Transfiguration, World Slash)
-}
+local UNBLOCKABLE_BLACKLIST = {}
 
 -- ============================================================
 -- STATE
 -- ============================================================
-local autoBlockEnabled    = false
-local blockDetectRange    = 25
-local blockHoldTime       = 0.4
-local blockHeld           = false
-local blockReleaseToken   = 0
+local autoBlockEnabled     = false
+local blockDetectRange     = 25
+local blockHoldTime        = 0.4
+local blockHeld            = false
+local blockReleaseToken    = 0
 
-local autoCounterEnabled  = false
-local counterKey          = Enum.KeyCode.R
-local counterCooldownTime = 1.5
-local counterCooldownEnd  = 0
+local autoCounterEnabled   = false
+local counterKey           = Enum.KeyCode.R
+local counterCooldownTime  = 1.5
+local counterCooldownEnd   = 0
 
-local autoBFCEnabled      = false
-local bfTiming            = 0.35  -- Tightened to wiki 0.3-0.4s window
-local bfRange             = 30
-local bfCooldownTime      = 3.0
-local bfCooldownEnd       = 0
-local bfDoubleTapDelay    = 0.04
-local bfTeleportBehind    = true
-local bfDashFirst         = true
-local bfAttackKey         = Enum.KeyCode.Three
-
-local autoPerfectBlockBF  = false
+local autoPerfectBlockBF   = false
 local perfectBlockCooldown = 2.0
-local lastPerfectBlock    = 0
+local lastPerfectBlock     = 0
 
-local autoDodgeEnabled    = false
-local autoAttackEnabled   = false
-local espEnabled          = false
-local killAuraEnabled     = false
+local bfTiming             = 0.35
+local bfRange              = 30
+local bfDoubleTapDelay     = 0.04
+local bfTeleportBehind     = true
+local bfDashFirst          = true
+local bfAttackKey          = Enum.KeyCode.Three
+local bfChainRunning       = false
+
+local camLockEnabled       = false
+local camLockSmooth        = false
+local camLockRange         = 100
+local camLockMode          = "Crosshair"
+local camLockTarget        = nil
+local camLockCurrentTarget = nil
+
+local autoDodgeEnabled     = false
+local autoAttackEnabled    = false
+local espEnabled           = false
+local killAuraEnabled      = false
 
 local activeAnimConnections = {}
 local espHighlights         = {}
+
+-- ============================================================
+-- ENTITY CACHE
+-- ============================================================
+local entityCache     = {}
+local lastCacheUpdate = 0
+local CACHE_INTERVAL  = 0.3
+
+local function refreshEntityCache()
+    if tick() - lastCacheUpdate < CACHE_INTERVAL then return end
+    lastCacheUpdate = tick()
+    entityCache = {}
+    local myChar = LocalPlayer.Character
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj.Name == "HumanoidRootPart" and obj.Parent ~= myChar then
+            local hum = obj.Parent:FindFirstChildOfClass("Humanoid")
+            if hum and hum.Health > 0 then
+                table.insert(entityCache, obj.Parent)
+            end
+        end
+    end
+end
+
+local function getClosestEntity(maxDist)
+    refreshEntityCache()
+    local myChar = LocalPlayer.Character
+    local myHRP  = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myHRP then return nil end
+    local best, bestDist = nil, maxDist
+    for _, char in ipairs(entityCache) do
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if hrp and char.Parent then
+            local d = (hrp.Position - myHRP.Position).Magnitude
+            if d < bestDist then bestDist = d; best = char end
+        end
+    end
+    return best, bestDist
+end
+
+-- Crosshair targeting: entity nearest to screen center
+local function getEntityInCrosshair(maxDist)
+    local cam = workspace.CurrentCamera
+    if not cam then return nil end
+    local viewport = cam.ViewportSize
+    local cx, cy = viewport.X / 2, viewport.Y / 2
+
+    local myChar = LocalPlayer.Character
+    local myHRP  = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myHRP then return nil end
+
+    refreshEntityCache()
+    local best, bestScreenDist = nil, math.huge
+
+    for _, char in ipairs(entityCache) do
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local worldDist = (hrp.Position - myHRP.Position).Magnitude
+            if worldDist <= maxDist then
+                local sp, onScreen = cam:WorldToViewportPoint(hrp.Position)
+                if onScreen and sp.Z > 0 then
+                    local dx, dy = sp.X - cx, sp.Y - cy
+                    local screenDist = math.sqrt(dx*dx + dy*dy)
+                    if screenDist < bestScreenDist then
+                        bestScreenDist = screenDist
+                        best = char
+                    end
+                end
+            end
+        end
+    end
+    return best
+end
+
+-- ============================================================
+-- CAM TARGET RESOLUTION
+-- ============================================================
+local function resolveCamTarget()
+    if camLockMode == "Nearest" then
+        return getClosestEntity(camLockRange)
+    end
+    if camLockMode == "Crosshair" then
+        -- Validate cached target
+        if camLockCurrentTarget and camLockCurrentTarget.Parent then
+            local hum  = camLockCurrentTarget:FindFirstChildOfClass("Humanoid")
+            local ehrp = camLockCurrentTarget:FindFirstChild("HumanoidRootPart")
+            local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if hum and hum.Health > 0 and ehrp and myHRP then
+                if (ehrp.Position - myHRP.Position).Magnitude <= camLockRange then
+                    return camLockCurrentTarget
+                end
+            end
+        end
+        camLockCurrentTarget = getEntityInCrosshair(camLockRange)
+        return camLockCurrentTarget
+    end
+    -- Specific Player
+    if camLockTarget and camLockTarget.Character then
+        local hrp = camLockTarget.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then return camLockTarget.Character end
+    end
+    return nil
+end
 
 -- ============================================================
 -- CORE HELPERS
@@ -104,9 +216,9 @@ local espHighlights         = {}
 local function triggerBlock()
     if blockHeld then
         blockReleaseToken = blockReleaseToken + 1
-        local myToken = blockReleaseToken
+        local t = blockReleaseToken
         task.delay(blockHoldTime, function()
-            if blockReleaseToken == myToken then
+            if blockReleaseToken == t then
                 VirtualInput:SendKeyEvent(false, Enum.KeyCode.F, false, game)
                 blockHeld = false
             end
@@ -116,9 +228,9 @@ local function triggerBlock()
     VirtualInput:SendKeyEvent(true, Enum.KeyCode.F, false, game)
     blockHeld = true
     blockReleaseToken = blockReleaseToken + 1
-    local myToken = blockReleaseToken
+    local t = blockReleaseToken
     task.delay(blockHoldTime, function()
-        if blockReleaseToken == myToken then
+        if blockReleaseToken == t then
             VirtualInput:SendKeyEvent(false, Enum.KeyCode.F, false, game)
             blockHeld = false
         end
@@ -139,30 +251,6 @@ local function pressKey(key, holdTime)
     VirtualInput:SendKeyEvent(false, key, false, game)
 end
 
--- Universal entity scan (works on players, dummies, NPCs)
-local function getClosestEntity(maxDist)
-    local best, bestDist = nil, maxDist
-    local myChar = LocalPlayer.Character
-    local myHRP  = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    if not myHRP then return nil end
-
-    -- Scan ALL descendants for HumanoidRootParts (covers dummies/NPCs)
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj.Name == "HumanoidRootPart" and obj.Parent ~= myChar then
-            local hum = obj.Parent:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health > 0 then
-                -- Skip if it's a player (players are handled separately, but this catches them too)
-                local d = (obj.Position - myHRP.Position).Magnitude
-                if d < bestDist then
-                    bestDist = d
-                    best = obj.Parent -- Return the character model
-                end
-            end
-        end
-    end
-    return best, bestDist
-end
-
 local function tryCounter()
     if not autoCounterEnabled then return false end
     if tick() < counterCooldownEnd then return false end
@@ -171,79 +259,56 @@ local function tryCounter()
     return true
 end
 
-local function onBlockableDetected()
-    if tryCounter() then return end
-    if autoBlockEnabled then triggerBlock() end
-end
-
--- ============================================================
--- PERFECT BLOCK BLACK FLASH
--- ============================================================
 local function attemptPerfectBlockBF()
-    if not autoPerfectBlockBF then return end
-    if tick() - lastPerfectBlock < perfectBlockCooldown then return end
-
-    -- Press F (block) briefly
+    if not autoPerfectBlockBF then return false end
+    if tick() - lastPerfectBlock < perfectBlockCooldown then return false end
     VirtualInput:SendKeyEvent(true, Enum.KeyCode.F, false, game)
     task.wait(0.03)
     VirtualInput:SendKeyEvent(false, Enum.KeyCode.F, false, game)
-
-    -- Immediately press M1
     task.wait(0.02)
     VirtualInput:SendMouseButtonEvent(0, 0, 0, true, game, 0)
     task.wait(0.05)
     VirtualInput:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-
     lastPerfectBlock = tick()
-    print("[PerfectBlockBF] Attempted F -> M1 counter.")
+    return true
+end
+
+local function onBlockableDetected()
+    if tryCounter() then return end
+    if attemptPerfectBlockBF() then return end
+    if autoBlockEnabled then triggerBlock() end
 end
 
 -- ============================================================
--- ANIMATION LISTENER (Works on all entities)
+-- ANIMATION LISTENER
 -- ============================================================
-local function setupEntityListener(entity)
-    local char = entity
+local function setupEntityListener(char)
     if not char or not char:FindFirstChild("Humanoid") then return end
-
     local hum = char:FindFirstChildOfClass("Humanoid")
-    local animator = hum:FindFirstChild("Animator")
+    local animator = hum and hum:FindFirstChild("Animator")
     if not animator then return end
-
-    -- Avoid duplicate connections
     if activeAnimConnections[char] then return end
 
     activeAnimConnections[char] = animator.AnimationPlayed:Connect(function(track)
         if not (autoBlockEnabled or autoCounterEnabled or autoPerfectBlockBF) then return end
         if not LocalPlayer.Character then return end
-
         local anim = track.Animation
         if not anim then return end
         local id = (anim.AnimationId or ""):match("%d+")
         if not id then return end
-
-        -- Blacklist check
         if UNBLOCKABLE_BLACKLIST[id] then
             if autoPerfectBlockBF then attemptPerfectBlockBF() end
             return
         end
-
         if not BLOCKABLE_ANIM_IDS[id] then return end
-
         local myHRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         local eHRP  = char:FindFirstChild("HumanoidRootPart")
         if not myHRP or not eHRP then return end
         if (eHRP.Position - myHRP.Position).Magnitude > blockDetectRange then return end
-
-        -- If Perfect Block BF is on and the move is blockable, try the F->M1 counter first
-        if autoPerfectBlockBF then
-            attemptPerfectBlockBF()
-        else
-            onBlockableDetected()
-        end
+        onBlockableDetected()
     end)
 end
 
--- Hook all current and future entities
 local function scanAllEntities()
     for _, obj in ipairs(workspace:GetDescendants()) do
         if obj.Name == "HumanoidRootPart" and obj.Parent ~= LocalPlayer.Character then
@@ -258,7 +323,7 @@ end
 scanAllEntities()
 workspace.DescendantAdded:Connect(function(obj)
     if obj.Name == "HumanoidRootPart" then
-        task.wait(1) -- Wait for character to load
+        task.wait(0.5)
         local char = obj.Parent
         if char and char:FindFirstChildOfClass("Humanoid") then
             setupEntityListener(char)
@@ -267,40 +332,168 @@ workspace.DescendantAdded:Connect(function(obj)
 end)
 
 -- ============================================================
--- BF CHAIN
+-- BF CHAIN (3-key trigger)
 -- ============================================================
 local function attemptBFC()
-    if not autoBFCEnabled then return end
-    if tick() < bfCooldownEnd then return end
-
-    local target, dist = getClosestEntity(bfRange)
-    if not target then return end
-
-    local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    local eHRP  = target:FindFirstChild("HumanoidRootPart")
-    if not myHRP or not eHRP then return end
-
-    bfCooldownEnd = tick() + bfCooldownTime
+    local myChar = LocalPlayer.Character
+    if not myChar then return end
+    local myHRP = myChar:FindFirstChild("HumanoidRootPart")
+    if not myHRP then return end
+    local target = getClosestEntity(bfRange)
+    if not target then
+        print("[BFC] No target within " .. bfRange .. " studs.")
+        return
+    end
+    local eHRP = target:FindFirstChild("HumanoidRootPart")
+    if not eHRP then return end
     print("[BFC] → " .. target.Name)
-
     if bfDashFirst then
         pressKey(Enum.KeyCode.Q, 0.08)
         task.wait(0.10)
     end
-
     if bfTeleportBehind then
         myHRP.CFrame = eHRP.CFrame * CFrame.new(0, 0, 3.5)
     end
     myHRP.CFrame = CFrame.new(myHRP.Position, eHRP.Position)
     task.wait(0.05)
-
-    -- First press (Divergent Fist)
     pressKey(bfAttackKey, bfDoubleTapDelay)
-    -- Wait for Black Flash window
     task.wait(bfTiming)
-    -- Second press (Black Flash timing)
     pressKey(bfAttackKey, bfDoubleTapDelay)
 end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode ~= Enum.KeyCode.Three then return end
+    if bfChainRunning then return end
+    local target = getClosestEntity(bfRange)
+    if not target then return end
+    bfChainRunning = true
+    task.spawn(function()
+        pcall(attemptBFC)
+        bfChainRunning = false
+    end)
+end)
+
+-- ============================================================
+-- CAM LOCK LOOP
+-- ============================================================
+RunService.RenderStepped:Connect(function()
+    if not camLockEnabled then return end
+    local myChar = LocalPlayer.Character
+    if not myChar then return end
+    local myHRP = myChar:FindFirstChild("HumanoidRootPart")
+    if not myHRP then return end
+    local targetChar = resolveCamTarget()
+    if not targetChar then return end
+    local eHRP = targetChar:FindFirstChild("HumanoidRootPart")
+    if not eHRP then return end
+    local cam = workspace.CurrentCamera
+    local desiredCF = CFrame.lookAt(cam.CFrame.Position, eHRP.Position)
+    if camLockSmooth then
+        cam.CFrame = cam.CFrame:Lerp(desiredCF, 0.25)
+    else
+        cam.CFrame = desiredCF
+    end
+end)
+
+-- ============================================================
+-- FLOATING CAM LOCK BUTTON
+-- ============================================================
+local parentGui = LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui")
+local oldBtn = parentGui:FindFirstChild("JJS_CamLockBtn")
+if oldBtn then oldBtn:Destroy() end
+
+local BtnGui = Instance.new("ScreenGui")
+BtnGui.Name = "JJS_CamLockBtn"
+BtnGui.ResetOnSpawn = false
+BtnGui.DisplayOrder = 9998
+BtnGui.Parent = parentGui
+
+-- Crosshair dot overlay
+local Crosshair = Instance.new("Frame")
+Crosshair.Size = UDim2.fromOffset(8, 8)
+Crosshair.Position = UDim2.new(0.5, -4, 0.5, -4)
+Crosshair.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+Crosshair.BorderSizePixel = 0
+Crosshair.Visible = false
+Crosshair.Parent = BtnGui
+Instance.new("UICorner", Crosshair).CornerRadius = UDim.new(1, 0)
+local chStroke = Instance.new("UIStroke", Crosshair)
+chStroke.Color = Color3.fromRGB(255, 255, 255)
+chStroke.Thickness = 1.5
+
+-- Floating button
+local Btn = Instance.new("TextButton")
+Btn.Size = UDim2.fromOffset(56, 56)
+Btn.Position = UDim2.new(0, 20, 0, 120)
+Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+Btn.BorderSizePixel = 0
+Btn.Text = "🎯"
+Btn.TextColor3 = Color3.fromRGB(220, 220, 230)
+Btn.Font = Enum.Font.GothamBold
+Btn.TextSize = 24
+Btn.AutoButtonColor = false
+Btn.Parent = BtnGui
+Instance.new("UICorner", Btn).CornerRadius = UDim.new(1, 0)
+local btnStroke = Instance.new("UIStroke", Btn)
+btnStroke.Color = Color3.fromRGB(100, 100, 120)
+btnStroke.Thickness = 2
+
+-- Drag + click toggle
+local btnDragging  = false
+local btnDragStart, btnStartPos
+local btnMoved     = false
+local DRAG_THRESHOLD = 5
+
+local function setCamLock(state)
+    camLockEnabled = state
+    if state then
+        camLockMode = "Crosshair"
+        camLockCurrentTarget = getEntityInCrosshair(camLockRange)
+        Btn.BackgroundColor3 = Color3.fromRGB(50, 160, 80)
+        btnStroke.Color = Color3.fromRGB(100, 220, 130)
+    else
+        camLockCurrentTarget = nil
+        Btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+        btnStroke.Color = Color3.fromRGB(100, 100, 120)
+    end
+    Crosshair.Visible = state
+end
+
+Btn.InputBegan:Connect(function(input)
+    if input.UserInputType ~= Enum.UserInputType.MouseButton1
+       and input.UserInputType ~= Enum.UserInputType.Touch then return end
+    btnDragging = true
+    btnMoved = false
+    btnDragStart = input.Position
+    btnStartPos = Btn.Position
+    local conn
+    conn = input.Changed:Connect(function()
+        if input.UserInputState == Enum.UserInputState.End then
+            btnDragging = false
+            if conn then conn:Disconnect() end
+            if not btnMoved then
+                setCamLock(not camLockEnabled)
+            end
+        end
+    end)
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if not btnDragging then return end
+    if input.UserInputType ~= Enum.UserInputType.MouseMovement
+       and input.UserInputType ~= Enum.UserInputType.Touch then return end
+    local d = input.Position - btnDragStart
+    if math.abs(d.X) > DRAG_THRESHOLD or math.abs(d.Y) > DRAG_THRESHOLD then
+        btnMoved = true
+    end
+    if btnMoved then
+        Btn.Position = UDim2.new(
+            btnStartPos.X.Scale, btnStartPos.X.Offset + d.X,
+            btnStartPos.Y.Scale, btnStartPos.Y.Offset + d.Y
+        )
+    end
+end)
 
 -- ============================================================
 -- ESP
@@ -314,15 +507,13 @@ local function updateESP()
     end
     if espEnabled then
         for _, plr in ipairs(Players:GetPlayers()) do
-            if plr ~= LocalPlayer and plr.Character then
-                if not espHighlights[plr] then
-                    local hl = Instance.new("Highlight")
-                    hl.FillColor = Color3.fromRGB(255, 60, 60)
-                    hl.FillTransparency = 0.6
-                    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-                    hl.Parent = plr.Character
-                    espHighlights[plr] = hl
-                end
+            if plr ~= LocalPlayer and plr.Character and not espHighlights[plr] then
+                local hl = Instance.new("Highlight")
+                hl.FillColor = Color3.fromRGB(255, 60, 60)
+                hl.FillTransparency = 0.6
+                hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+                hl.Parent = plr.Character
+                espHighlights[plr] = hl
             end
         end
     end
@@ -337,7 +528,6 @@ RunService.Heartbeat:Connect(function()
     local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
     if not hrp or not hum or hum.Health <= 0 then return end
 
-    -- Auto Dodge
     if autoDodgeEnabled then
         local st = hum:GetState()
         if st == Enum.HumanoidStateType.Ragdoll or st == Enum.HumanoidStateType.FallingDown then
@@ -345,45 +535,41 @@ RunService.Heartbeat:Connect(function()
         end
     end
 
-    -- Auto Attack
     if autoAttackEnabled then
         local target = getClosestEntity(20)
         if target then
             local eHRP = target:FindFirstChild("HumanoidRootPart")
             if eHRP then
                 hrp.CFrame = CFrame.new(hrp.Position, eHRP.Position)
-                VirtualInput:SendMouseButtonEvent(0, 0, 0, true,  game, 0)
+                VirtualInput:SendMouseButtonEvent(0, 0, 0, true, game, 0)
                 task.wait(0.1)
                 VirtualInput:SendMouseButtonEvent(0, 0, 0, false, game, 0)
             end
         end
     end
 
-    -- Kill Aura
     if killAuraEnabled then
-        for _, obj in ipairs(workspace:GetDescendants()) do
-            if obj.Name == "HumanoidRootPart" and obj.Parent ~= LocalPlayer.Character then
-                local eHum = obj.Parent:FindFirstChildOfClass("Humanoid")
-                if eHum and eHum.Health > 0 and (obj.Position - hrp.Position).Magnitude < 10 then
+        for _, char in ipairs(entityCache) do
+            local eHum = char:FindFirstChildOfClass("Humanoid")
+            local eHRP = char:FindFirstChild("HumanoidRootPart")
+            if eHum and eHRP and eHum.Health > 0 then
+                if (eHRP.Position - hrp.Position).Magnitude < 10 then
                     eHum:TakeDamage(5)
                 end
             end
         end
     end
-
-    -- BF Chain loop
-    if autoBFCEnabled then attemptBFC() end
 end)
 
 -- ============================================================
--- WINDOW & TABS
+-- WINDOW + TABS
 -- ============================================================
 local Window = WindUI:CreateWindow({
     Title = "Jujutsu Shenanigans Hub",
     Icon = "swords",
     Author = "WindUI",
     Folder = "JJS_Hub",
-    Size = UDim2.fromOffset(620, 520),
+    Size = UDim2.fromOffset(620, 540),
     ToggleKey = Enum.KeyCode.RightShift,
     Theme = "Dark",
     Resizable = true,
@@ -404,14 +590,12 @@ BlockTab:Toggle({
 
 BlockTab:Slider({
     Title = "Detect Range (studs)",
-    Desc = "Only block attacks within this distance",
     Min = 5, Max = 60, Default = 25,
     Callback = function(v) blockDetectRange = v end,
 })
 
 BlockTab:Slider({
     Title = "Block Hold Time (s)",
-    Desc = "How long F is held per trigger",
     Min = 0.15, Max = 1.0, Default = 0.4,
     Callback = function(v) blockHoldTime = v end,
 })
@@ -423,14 +607,13 @@ local CounterTab = Window:Tab({ Title = "Counter", Icon = "zap" })
 
 CounterTab:Toggle({
     Title = "Auto Counter (Priority)",
-    Desc = "Tries to counter before falling back to block",
+    Desc = "Counter fires before PBF before Block",
     Flag = "AutoCounter",
     Callback = function(s) autoCounterEnabled = s end,
 })
 
 CounterTab:Dropdown({
     Title = "Counter Key",
-    Desc = "Which key your character's counter move is bound to",
     Options = { "One", "Two", "Three", "Four", "Q", "R", "F", "G" },
     Default = "R",
     Callback = function(v) counterKey = Enum.KeyCode[v] end,
@@ -438,14 +621,13 @@ CounterTab:Dropdown({
 
 CounterTab:Slider({
     Title = "Counter Cooldown (s)",
-    Desc = "Time before counter can trigger again",
     Min = 0.5, Max = 5, Default = 1.5,
     Callback = function(v) counterCooldownTime = v end,
 })
 
 CounterTab:Toggle({
     Title = "Auto Perfect Block BF",
-    Desc = "Attempts F -> M1 Black Flash Counter on incoming attacks",
+    Desc = "F → M1 Black Flash Counter on incoming attacks",
     Flag = "AutoPerfectBF",
     Callback = function(s) autoPerfectBlockBF = s end,
 })
@@ -455,37 +637,25 @@ CounterTab:Toggle({
 -- ============================================================
 local BFTab = Window:Tab({ Title = "BF Chain", Icon = "sparkles" })
 
-BFTab:Toggle({
-    Title = "Auto Black Flash Chain (Yuji)",
-    Desc = "Dash → teleport behind → double-tap 3 for Black Flash",
-    Flag = "AutoBFC",
-    Callback = function(s) autoBFCEnabled = s end,
+BFTab:Paragraph({
+    Title = "Trigger: Press 3",
+    Desc = "Press 3 near an enemy → dash → teleport behind → double-tap 3 for Black Flash.",
 })
 
 BFTab:Slider({
     Title = "BF Timing (s)",
-    Desc = "Delay between first 3 and second 3 (0.3-0.4s ideal)",
     Min = 0.20, Max = 0.60, Default = 0.35,
     Callback = function(v) bfTiming = v end,
 })
 
 BFTab:Slider({
     Title = "Chain Range (studs)",
-    Desc = "Max distance to initiate the chain",
     Min = 10, Max = 60, Default = 30,
     Callback = function(v) bfRange = v end,
 })
 
-BFTab:Slider({
-    Title = "Chain Cooldown (s)",
-    Desc = "Seconds between chain attempts",
-    Min = 1, Max = 10, Default = 3.0,
-    Callback = function(v) bfCooldownTime = v end,
-})
-
 BFTab:Toggle({
     Title = "Dash First",
-    Desc = "Press Q before teleporting",
     Default = true,
     Flag = "BFDash",
     Callback = function(s) bfDashFirst = s end,
@@ -493,59 +663,101 @@ BFTab:Toggle({
 
 BFTab:Toggle({
     Title = "Teleport Behind Target",
-    Desc = "Curve to the enemy's back before the double-tap",
     Default = true,
     Flag = "BFTeleport",
     Callback = function(s) bfTeleportBehind = s end,
 })
 
 -- ============================================================
--- TAB: OTHER FEATURES
+-- TAB: CAM LOCK
+-- ============================================================
+local CamTab = Window:Tab({ Title = "Cam Lock", Icon = "eye" })
+
+CamTab:Toggle({
+    Title = "Camera Lock (tab toggle)",
+    Desc = "Same as clicking the floating 🎯 button",
+    Flag = "CamLock",
+    Callback = function(s) setCamLock(s) end,
+})
+
+CamTab:Toggle({
+    Title = "Smooth Camera",
+    Desc = "Lerp instead of snap",
+    Flag = "CamSmooth",
+    Callback = function(s) camLockSmooth = s end,
+})
+
+CamTab:Slider({
+    Title = "Lock Range (studs)",
+    Min = 10, Max = 300, Default = 100,
+    Callback = function(v) camLockRange = v end,
+})
+
+CamTab:Dropdown({
+    Title = "Target Mode",
+    Desc = "Crosshair = middle of screen · Nearest = closest entity",
+    Options = { "Crosshair", "Nearest", "Specific Player" },
+    Default = "Crosshair",
+    Callback = function(v) camLockMode = v; camLockCurrentTarget = nil end,
+})
+
+CamTab:Paragraph({
+    Title = "Floating button",
+    Desc = "Drag the 🎯 button anywhere on screen. Click it to toggle lock. Red dot appears at your screen center when active.",
+})
+
+-- ============================================================
+-- TAB: OTHER
 -- ============================================================
 local OtherTab = Window:Tab({ Title = "Other Features", Icon = "box" })
 
 OtherTab:Toggle({
     Title = "Auto Dodge",
-    Desc = "Dashes (Q) when ragdolled or knocked down",
     Flag = "AutoDodge",
     Callback = function(s) autoDodgeEnabled = s end,
 })
 
 OtherTab:Toggle({
     Title = "Auto Attack",
-    Desc = "Spams M1 at the nearest entity (players + dummies)",
     Flag = "AutoAttack",
     Callback = function(s) autoAttackEnabled = s end,
 })
 
 OtherTab:Toggle({
     Title = "Player ESP",
-    Desc = "Highlights all nearby players",
     Flag = "ESP",
     Callback = function(s) espEnabled = s; updateESP() end,
 })
 
 OtherTab:Toggle({
     Title = "Kill Aura (client-side demo)",
-    Desc = "WARNING: TakeDamage is client-only — doesn't replicate to server",
     Flag = "KillAura",
     Callback = function(s) killAuraEnabled = s end,
 })
 
-OtherTab:Button({
-    Title = "Teleport to Nearest Entity",
-    Desc = "Instantly teleport behind the closest player or dummy",
-    Callback = function()
-        local target = getClosestEntity(200)
-        if target and LocalPlayer.Character then
-            local eHRP = target:FindFirstChild("HumanoidRootPart")
-            local mHRP = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-            if eHRP and mHRP then
-                mHRP.CFrame = eHRP.CFrame * CFrame.new(0, 0, 3)
-            end
-        end
-    end,
+-- ============================================================
+-- TAB: PLAYERS
+-- ============================================================
+local PlayerTab = Window:Tab({ Title = "Players", Icon = "users" })
+
+local playerDropdown = PlayerTab:Dropdown({
+    Title = "Select Player",
+    Desc = "Used for cam-lock specific-player mode",
+    Options = {},
+    Callback = function(opt) camLockTarget = Players:FindFirstChild(opt) end,
 })
+
+local function refreshPlayerList()
+    local opts = {}
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then table.insert(opts, plr.Name) end
+    end
+    pcall(function() playerDropdown:Refresh(opts) end)
+end
+
+refreshPlayerList()
+Players.PlayerAdded:Connect(refreshPlayerList)
+Players.PlayerRemoving:Connect(refreshPlayerList)
 
 -- ============================================================
 -- CLEANUP
@@ -555,4 +767,4 @@ Window:OnClose(function()
     VirtualInput:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
 end)
 
-print("[JJS Hub] Loaded — RightShift to toggle. Dummies/NPCs supported.")
+print("[JJS Hub v4] Loaded — floating 🎯 button enabled.")
